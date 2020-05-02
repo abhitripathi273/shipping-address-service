@@ -48,7 +48,7 @@ public class ShippingAddressController {
 		shippingService.deleteShippingAddress(userId, addressId);
 	}
 
-	@PutMapping("/user/{userId}/shippingAddress")
+	@PutMapping("/user/{userId}/updateShippingAddress")
 	@ResponseStatus
 	public ResponseEntity<ShippingAddress> updateShippingAddress(@PathVariable String userId,
 			@RequestBody ShippingAddress shippingAddress) throws UserNotFoundException {
