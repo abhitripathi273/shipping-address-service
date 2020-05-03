@@ -8,6 +8,8 @@ import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import org.apache.commons.lang.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,13 +25,13 @@ import com.microservices.shipping.address.app.repository.ShippingAddressReposito
 @Service
 public class ShippingAddressService {
 
+	private static Logger LOGGER = LoggerFactory.getLogger(ShippingAddressService.class);
+	
 	@Autowired
 	private ShippingAddressRepository shippinAddressRepo;
 
 	public List<ShippingAddress> getShippingAddressListByUserId(String userId) throws UserNotFoundException {
-		User user = getUserFromRestApi(userId);
-		if (null == user.getUserId())
-			throw new UserNotFoundException("User ID is invalid or not found in DB");
+		checkUserValidity(userId);
 		Iterable<ShippingAddress> addressList = shippinAddressRepo.findAll();
 		return StreamSupport.stream(addressList.spliterator(), false)
 				.filter(shippingAddress -> StringUtils.equals(String.valueOf(shippingAddress.getUserId()), userId))
@@ -38,39 +40,38 @@ public class ShippingAddressService {
 
 	public ShippingAddress getShippingAddressById(String userId, String addressId)
 			throws ShippingAddressNotFoundException, UserNotFoundException {
-		User user = getUserFromRestApi(userId);
-		if (null == user.getUserId())
-			throw new UserNotFoundException("User ID is invalid or not found in DB");
+		checkUserValidity(userId);
 		ShippingAddress shippingAddress = shippinAddressRepo.findById(Long.valueOf(addressId)).get();
-		if (!StringUtils.equals(userId, String.valueOf(shippingAddress.getUserId())))
+		if (!StringUtils.equals(userId, String.valueOf(shippingAddress.getUserId()))) {
+			LOGGER.error("Unable to find the Shipping Address with addressId: {}", addressId);
 			throw new ShippingAddressNotFoundException("Shipping Address is not found in DB");
+		}
+		LOGGER.debug("shipping address found with addressId: {}",addressId);
 		return shippingAddress;
 	}
 
 	public ResponseEntity<ShippingAddress> createShippingAddress(String userId, ShippingAddress newShippingAddress)
 			throws UserNotFoundException {
-		User user = getUserFromRestApi(userId);
-		if (null == user.getUserId())
-			throw new UserNotFoundException("User ID is invalid or not found in DB");
+		checkUserValidity(userId);
 		newShippingAddress.setUserId(Long.valueOf(userId));
-		newShippingAddress.setAddressId(generateUniqueId());
+		Long addressId = generateUniqueId();
+		newShippingAddress.setAddressId(addressId);
 		ShippingAddress shippingAddress = shippinAddressRepo.save(newShippingAddress);
+		LOGGER.debug("shipping address created with addressId: {}",addressId);
 		return new ResponseEntity(shippingAddress, HttpStatus.CREATED);
 	}
 
 	public void deleteShippingAddress(String userId, String shippingAddressId) throws UserNotFoundException {
-		User user = getUserFromRestApi(userId);
-		if (null == user.getUserId())
-			throw new UserNotFoundException("User ID is invalid or not found in DB");
+		checkUserValidity(userId);
 		shippinAddressRepo.deleteById(Long.valueOf(shippingAddressId));
+		LOGGER.debug("shipping address deleted successfully");
 	}
 
 	public ResponseEntity<ShippingAddress> updateShippingAddress(String userId, ShippingAddress shippingAddress)
 			throws UserNotFoundException {
-		User user = getUserFromRestApi(userId);
-		if (null == user.getUserId())
-			throw new UserNotFoundException("User ID is invalid or not found in DB");
+		checkUserValidity(userId);
 		shippinAddressRepo.save(shippingAddress);
+		LOGGER.debug("shipping address updated successfully");
 		return new ResponseEntity(shippingAddress, HttpStatus.OK);
 	}
 
@@ -94,4 +95,11 @@ public class ShippingAddressService {
 		return user;
 	}
 
+	private void checkUserValidity(String userId) throws UserNotFoundException {
+		User user = getUserFromRestApi(userId);
+		if (null == user.getUserId()) {
+			LOGGER.error("Unable to find the user with userId: {}", userId);
+			throw new UserNotFoundException("User ID is invalid or not found in DB");
+		}
+	}
 }
